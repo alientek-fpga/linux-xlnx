@@ -161,6 +161,14 @@ config COMMON_CLK_IDT8T49N24X
 	  All outputs are currently assumed to be LVDS, unless overridden
 	  in the full register map in the DT.
 
+config COMMON_CLK_DGLNT_DYNCLK
+	tristate "Digilent axi_dynclk Driver"
+	depends on ARCH_ZYNQ || MICROBLAZE
+	help
+	---help---
+	  Support for the Digilent AXI Dynamic Clock core for Xilinx
+	  FPGAs.
+
 config COMMON_CLK_CDCE706
 	tristate "Clock driver for TI CDCE706 clock synthesizer"
 	depends on I2C
