@@ -57,3 +57,15 @@ config DRM_XILINX_SDI
 	depends on DRM_XILINX
 	help
 	  DRM driver for Xilinx SDI Tx Subsystem.
+
+config DRM_DIGILENT_ENCODER
+	tristate "Digilent VGA/HDMI DRM Encoder Driver"
+	depends on DRM_XILINX
+	help
+	  DRM slave encoder for Video-out on Digilent boards.
+
+config DRM_ATK_LCD_ENCODER
+   tristate "ATK LCD DRM Encoder Driver"
+   depends on DRM_XILINX
+   help
+     DRM slave encoder for Navigator LCD.
