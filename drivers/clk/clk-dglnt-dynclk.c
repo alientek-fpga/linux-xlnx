@@ -224,7 +224,7 @@ struct dglnt_dynclk {
 	unsigned long freq;
 };
 
-u32 dglnt_dynclk_divider(u32 divide)
+static u32 dglnt_dynclk_divider(u32 divide)
 {
 	u32 output = 0;
 	u32 highTime = 0;
@@ -250,7 +250,7 @@ u32 dglnt_dynclk_divider(u32 divide)
 	return output;
 }
 
-u32 dglnt_dynclk_count_calc(u32 divide)
+static u32 dglnt_dynclk_count_calc(u32 divide)
 {
 	u32 output = 0;
 	u32 divCalc = 0;
@@ -264,7 +264,7 @@ u32 dglnt_dynclk_count_calc(u32 divide)
 }
 
 
-int dglnt_dynclk_find_reg(struct dglnt_dynclk_reg *regValues,
+static int dglnt_dynclk_find_reg(struct dglnt_dynclk_reg *regValues,
 			  struct dglnt_dynclk_mode *clkParams)
 {
 	if ((clkParams->fbmult < 2) || clkParams->fbmult > 64)
@@ -295,7 +295,7 @@ int dglnt_dynclk_find_reg(struct dglnt_dynclk_reg *regValues,
 	return 0;
 }
 
-void dglnt_dynclk_write_reg(struct dglnt_dynclk_reg *regValues,
+static void dglnt_dynclk_write_reg(struct dglnt_dynclk_reg *regValues,
 			    void __iomem *baseaddr)
 {
 	writel(regValues->clk0L, baseaddr + OFST_DISPLAY_CLK_L);
@@ -306,7 +306,7 @@ void dglnt_dynclk_write_reg(struct dglnt_dynclk_reg *regValues,
 	writel(regValues->fltr_lockH, baseaddr + OFST_DISPLAY_FLTR_LOCK_H);
 }
 
-u32 dglnt_dynclk_find_mode(u32 freq, u32 parentFreq,
+static u32 dglnt_dynclk_find_mode(u32 freq, u32 parentFreq,
 			   struct dglnt_dynclk_mode *bestPick)
 {
 	u32 bestError = MMCM_FREQ_OUTMAX;
@@ -486,6 +486,8 @@ static int dglnt_dynclk_probe(struct platform_device *pdev)
 	const char *clk_name;
 	struct resource *mem;
 	struct clk *clk;
+	static int count = 0;
+	char *str = NULL;
 
 	if (!pdev->dev.of_node)
 		return -ENODEV;
@@ -497,6 +499,11 @@ static int dglnt_dynclk_probe(struct platform_device *pdev)
 	dglnt_dynclk = devm_kzalloc(&pdev->dev, sizeof(*dglnt_dynclk),
 				    GFP_KERNEL);
 	if (!dglnt_dynclk)
+		return -ENOMEM;
+
+	str = devm_kzalloc(&pdev->dev, sizeof(char) * 20,
+				GFP_KERNEL);
+	if (!str)
 		return -ENOMEM;
 
 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -512,7 +519,8 @@ static int dglnt_dynclk_probe(struct platform_device *pdev)
 	of_property_read_string(pdev->dev.of_node, "clock-output-names",
 		&clk_name);
 
-	init.name = clk_name;
+	sprintf(str, "%s:%d", clk_name, count);
+	init.name = str;
 	init.ops = &dglnt_dynclk_ops;
 	init.flags = 0;
 	init.parent_names = &parent_name;
@@ -526,6 +534,7 @@ static int dglnt_dynclk_probe(struct platform_device *pdev)
 	if (IS_ERR(clk))
 		return PTR_ERR(clk);
 
+	count++;
 	return of_clk_add_provider(pdev->dev.of_node, of_clk_src_simple_get,
 				   clk);
 }

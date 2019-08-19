@@ -58,14 +58,19 @@ config DRM_XILINX_SDI
 	help
 	  DRM driver for Xilinx SDI Tx Subsystem.
 
+config FB_XILINX_VDMA
+        tristate "Xilinx LCD framebuffer driver support By Alientek"
+        depends on FB && ARCH_ZYNQ && XILINX_DMA && DRM_DIGILENT_ENCODER
+        select FB_SYS_FILLRECT
+        select FB_SYS_COPYAREA
+        select FB_SYS_IMAGEBLIT
+        select FB_MODE_HELPERS
+        select VIDEOMODE_HELPERS
+        help
+          LCD framebuffer driver based on vdma, vtc, dyclk IP core.
+
 config DRM_DIGILENT_ENCODER
 	tristate "Digilent VGA/HDMI DRM Encoder Driver"
 	depends on DRM_XILINX
 	help
 	  DRM slave encoder for Video-out on Digilent boards.
-
-config DRM_ATK_LCD_ENCODER
-   tristate "ATK LCD DRM Encoder Driver"
-   depends on DRM_XILINX
-   help
-     DRM slave encoder for Navigator LCD.

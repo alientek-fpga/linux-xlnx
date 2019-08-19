@@ -324,13 +324,6 @@ config COMMON_CLK_STM32H7
 	---help---
 	  Support for stm32h7 SoC family clocks
 
-config COMMON_CLK_DGLNT_DYNCLK
-	tristate "Digilent axi_dynclk Driver"
-	depends on ARCH_ZYNQ || MICROBLAZE
-	help
-	---help---
-	  Support for the Digilent AXI Dynamic Clock core for Xilinx
-	  FPGAs.
 
 source "drivers/clk/actions/Kconfig"
 source "drivers/clk/bcm/Kconfig"
