@@ -36,6 +36,13 @@
 #define  ATK_LCD_MAX_YRES    1080
 #define  ATK_LCD_MIN_YRES    272
 
+/* Alientek LCD module hardware ID number definition */
+#define ATK_LCD_ID_4X3_480X272		0x0
+#define ATK_LCD_ID_4X3_800X480		0x1
+#define ATK_LCD_ID_7_800X480		0x4
+#define ATK_LCD_ID_7_1024X600		0x2
+#define ATK_LCD_ID_10X1_1280X800	0x5
+
 
 enum vdma_pixel_format {
 	VDMA_PIXEL_FORMAT_NONE   = -1,
@@ -51,6 +58,9 @@ struct vdma_video_format_desc {
 	unsigned int bpp;
 	enum vdma_pixel_format pixel_format;
 };
+
+static int bl_gpio, rst_gpio;
+static int lcd_id_gpios[3];
 
 static const struct vdma_video_format_desc video_formats_table[] = {
 	{ "rgb565", 16, 16, VDMA_PIXEL_FORMAT_RGB565 },
@@ -71,6 +81,7 @@ struct xilinx_vdmafb_dev {
 	struct clk *pclk;
 	struct xilinx_vtc *vtc;
 	struct dma_chan *dma;
+	int is_hdmi;
 };
 
 static inline unsigned chan_to_field(unsigned chan, struct fb_bitfield *bf)
@@ -155,6 +166,8 @@ static int vdmafb_get_fbinfo_dt(struct xilinx_vdmafb_dev *fbdev,
 	u32 flags = 0;
 	int ret = -1;
 	int i   = 0;
+	int lcd_id = 0x0;
+	int display_timing_num;
 
 	ret = of_property_read_string(dev->of_node, "xlnx,pixel-format", &name);
 	if (0 > ret) {
@@ -162,7 +175,65 @@ static int vdmafb_get_fbinfo_dt(struct xilinx_vdmafb_dev *fbdev,
 		return ret;
 	}
 
-	node = of_parse_phandle(dev->of_node, "display-timing", 0);
+	/* Check LCD or HDMI */
+	ret = of_property_read_u32(dev->of_node, "is-hdmi", &fbdev->is_hdmi);
+	if (!ret && fbdev->is_hdmi) {
+		display_timing_num = 0;
+		goto check_done;
+	}
+
+	fbdev->is_hdmi = 0;
+
+	/* Read Alientek LCD module hardware ID */
+	for (i = 0; i < 3; i++) {
+
+		char temp[25] = {0};
+		sprintf(temp, "%s%d", "atk,lcd-id", i);
+
+		lcd_id_gpios[i] = of_get_named_gpio(dev->of_node, "atk,lcd-id", i);
+		if (!gpio_is_valid(lcd_id_gpios[i])) {
+			dev_err(dev, "Failed to get lcd id gpio %d\n", i);
+			break;
+		}
+
+		ret = devm_gpio_request_one(dev, lcd_id_gpios[i], GPIOF_IN, temp);
+		if (0 > ret)
+			break;
+
+		lcd_id |= (gpio_get_value_cansleep(lcd_id_gpios[i]) << i);
+	}
+
+	dev_info(dev, "LCD ID num: %d\n", lcd_id);
+	switch (lcd_id) {
+
+	case ATK_LCD_ID_4X3_480X272:
+		display_timing_num = 0;
+		break;
+
+	case ATK_LCD_ID_4X3_800X480:
+		display_timing_num = 1;
+		break;
+
+	case ATK_LCD_ID_7_800X480:
+		display_timing_num = 2;
+		break;
+
+	case ATK_LCD_ID_7_1024X600:
+		display_timing_num = 3;
+		break;
+
+	case ATK_LCD_ID_10X1_1280X800:
+		display_timing_num = 4;
+		break;
+
+	default:
+		display_timing_num = 2;
+		dev_info(dev, "ID match failed, using default configuration\n");
+		break;
+	}
+
+check_done:
+	node = of_parse_phandle(dev->of_node, "display-timings", display_timing_num);
 	if (!node) {
 		dev_err(dev, "Failed to find display timing phandle\n");
 		return -EINVAL;
@@ -436,8 +507,6 @@ static int vdmafb_init_vdma(struct xilinx_vdmafb_dev *fbdev)
 	return 0;
 }
 
-static int bl_gpio, rst_gpio;
-
 static int vdmafb_probe(struct platform_device *pdev)
 {
 	struct xilinx_vdmafb_dev *fbdev = NULL;
@@ -553,6 +622,9 @@ static int vdmafb_probe(struct platform_device *pdev)
 	}
 
 	/* reset LCD hardware */
+	if (fbdev->is_hdmi)
+		goto reset_done;
+
 	rst_gpio = of_get_named_gpio(pdev->dev.of_node, "rst-gpios", 0);
 	if (!gpio_is_valid(rst_gpio)) {
 		dev_err(&pdev->dev, "Failed to get lcd reset gpio\n");
@@ -582,6 +654,7 @@ static int vdmafb_probe(struct platform_device *pdev)
 	if (ret < 0) 
 		goto cap_dealloc;
 
+reset_done:
 	/* register framebuffer */
 	ret = register_framebuffer(info);
 	if (0 > ret) {
@@ -589,7 +662,9 @@ static int vdmafb_probe(struct platform_device *pdev)
 		goto cap_dealloc;
 	}
 
-	gpio_set_value_cansleep(bl_gpio, 1);  // turn on the backlight
+	if (!fbdev->is_hdmi)
+		gpio_set_value_cansleep(bl_gpio, 1);  // turn on the backlight
+
 	dev_info(&pdev->dev, "Initialized successful.\n");
 
 	return 0;
@@ -632,7 +707,8 @@ static int vdmafb_remove(struct platform_device *pdev)
 	unregister_framebuffer(fbdev->info);
 	framebuffer_release(fbdev->info);
 
-	gpio_set_value_cansleep(bl_gpio, 0);  // turn off the backlight
+	if (!fbdev->is_hdmi)
+		gpio_set_value_cansleep(bl_gpio, 0);  // turn off the backlight
 
 	return 0;
 }
