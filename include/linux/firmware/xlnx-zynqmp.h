@@ -171,6 +171,9 @@ enum pm_ioctl_id {
 	/* Probe counter read/write */
 	IOCTL_PROBE_COUNTER_READ,
 	IOCTL_PROBE_COUNTER_WRITE,
+	IOCTL_OSPI_MUX_SELECT,
+	/* IOCTL for USB power request */
+	IOCTL_USB_SET_STATE,
 };
 
 enum pm_query_id {
@@ -447,6 +450,7 @@ enum pm_pinctrl_config_param {
 	PM_PINCTRL_CONFIG_SCHMITT_CMOS,
 	PM_PINCTRL_CONFIG_DRIVE_STRENGTH,
 	PM_PINCTRL_CONFIG_VOLTAGE_STATUS,
+	PM_PINCTRL_CONFIG_TRI_STATE,
 	PM_PINCTRL_CONFIG_MAX,
 };
 
@@ -475,6 +479,11 @@ enum pm_pinctrl_drive_strength {
 	PM_PINCTRL_DRIVE_STRENGTH_4MA,
 	PM_PINCTRL_DRIVE_STRENGTH_8MA,
 	PM_PINCTRL_DRIVE_STRENGTH_12MA,
+};
+
+enum pm_pinctrl_tri_state {
+	PM_PINCTRL_TRI_STATE_DISABLE = 0,
+	PM_PINCTRL_TRI_STATE_ENABLE,
 };
 
 enum rpu_oper_mode {

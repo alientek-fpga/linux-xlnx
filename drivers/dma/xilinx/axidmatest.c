@@ -343,16 +343,7 @@ static int dmatest_slave_func(void *data)
 			dma_dsts[i] = dma_map_single(rx_dev->dev,
 							thread->dsts[i],
 							test_buf_size,
-							DMA_MEM_TO_DEV);
-
-			dma_unmap_single(rx_dev->dev, dma_dsts[i],
-							test_buf_size,
-							DMA_MEM_TO_DEV);
-
-			dma_dsts[i] = dma_map_single(rx_dev->dev,
-							thread->dsts[i],
-							test_buf_size,
-							DMA_DEV_TO_MEM);
+							DMA_BIDIRECTIONAL);
 		}
 
 		sg_init_table(tx_sg, bd_cnt);
@@ -380,7 +371,7 @@ static int dmatest_slave_func(void *data)
 			for (i = 0; i < dst_cnt; i++)
 				dma_unmap_single(rx_dev->dev, dma_dsts[i],
 						test_buf_size,
-						DMA_DEV_TO_MEM);
+						DMA_BIDIRECTIONAL);
 			pr_warn(
 			"%s: #%u: prep error with src_off=0x%x ",
 				thread_name, total_tests - 1, src_off);
@@ -460,7 +451,7 @@ static int dmatest_slave_func(void *data)
 		/* Unmap by myself */
 		for (i = 0; i < dst_cnt; i++)
 			dma_unmap_single(rx_dev->dev, dma_dsts[i],
-					test_buf_size, DMA_DEV_TO_MEM);
+					test_buf_size, DMA_BIDIRECTIONAL);
 
 		error_count = 0;
 		start = ktime_get();
@@ -551,6 +542,7 @@ static int dmatest_add_slave_threads(struct dmatest_chan *tx_dtc,
 	struct dmatest_slave_thread *thread;
 	struct dma_chan *tx_chan = tx_dtc->chan;
 	struct dma_chan *rx_chan = rx_dtc->chan;
+	int ret;
 
 	thread = kzalloc(sizeof(struct dmatest_slave_thread), GFP_KERNEL);
 	if (!thread) {
@@ -565,11 +557,12 @@ static int dmatest_add_slave_threads(struct dmatest_chan *tx_dtc,
 	smp_wmb();
 	thread->task = kthread_run(dmatest_slave_func, thread, "%s-%s",
 		dma_chan_name(tx_chan), dma_chan_name(rx_chan));
+	ret = PTR_ERR(thread->task);
 	if (IS_ERR(thread->task)) {
 		pr_warn("dmatest: Failed to run thread %s-%s\n",
 				dma_chan_name(tx_chan), dma_chan_name(rx_chan));
 		kfree(thread);
-		return PTR_ERR(thread->task);
+		return ret;
 	}
 
 	/* srcbuf and dstbuf are allocated by the thread itself */
@@ -627,16 +620,19 @@ static int xilinx_axidmatest_probe(struct platform_device *pdev)
 	struct dma_chan *chan, *rx_chan;
 	int err;
 
-	chan = dma_request_slave_channel(&pdev->dev, "axidma0");
+	chan = dma_request_chan(&pdev->dev, "axidma0");
 	if (IS_ERR(chan)) {
-		pr_err("xilinx_dmatest: No Tx channel\n");
-		return PTR_ERR(chan);
+		err = PTR_ERR(chan);
+		if (err != -EPROBE_DEFER)
+			pr_err("xilinx_dmatest: No Tx channel\n");
+		return err;
 	}
 
-	rx_chan = dma_request_slave_channel(&pdev->dev, "axidma1");
+	rx_chan = dma_request_chan(&pdev->dev, "axidma1");
 	if (IS_ERR(rx_chan)) {
 		err = PTR_ERR(rx_chan);
-		pr_err("xilinx_dmatest: No Rx channel\n");
+		if (err != -EPROBE_DEFER)
+			pr_err("xilinx_dmatest: No Rx channel\n");
 		goto free_tx;
 	}
 
@@ -681,7 +677,6 @@ static const struct of_device_id xilinx_axidmatest_of_ids[] = {
 static struct platform_driver xilinx_axidmatest_driver = {
 	.driver = {
 		.name = "xilinx_axidmatest",
-		.owner = THIS_MODULE,
 		.of_match_table = xilinx_axidmatest_of_ids,
 	},
 	.probe = xilinx_axidmatest_probe,
